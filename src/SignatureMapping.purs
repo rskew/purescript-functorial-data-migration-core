@@ -11,7 +11,7 @@ import Data.Tuple (Tuple(..), fst, snd)
 import Effect.Exception (error, throwException)
 import Effect.Unsafe (unsafePerformEffect)
 import KnuthBendix (Equation(..), eqModuloTheory, knuthBendix)
-import Signature (Edge, Node, Path, Signature, pathIsSupported, pathSource, pathTarget, signatureIsWellFormed)
+import Signature (Edge, Node, Path, Signature, edgeSource, edgeTarget, pathIsSupported, pathSource, pathTarget, signatureIsWellFormed)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- | A signature mapping represents a functor between categories from which the
@@ -36,10 +36,10 @@ import Unsafe.Coerce (unsafeCoerce)
 -- | guaranteed not to violiate data-integrity constraints, when those
 -- | constraints are given as path equations.
 -- |
--- | Particular migrations can only be computed when their functos obeys
+-- | Particular migrations can only be computed when their functors obeys
 -- | additional restrictions:
 -- |
--- | - $\Pi$ migrations require the functor's object function to be a bijection
+-- | - $\Pi$ migrations require the functor's object function be a bijection
 -- |   to ensure that the values used to fill in attributes (typed base-language
 -- |   values) in the target tables are present in the source tables.
 -- |
@@ -59,11 +59,14 @@ type SignatureMapping
 -- | to the codomain.
 type Func a b = Set (Tuple a b)
 
--- | Lookup the pair with the corresponding value of the domain.
+-- | Lookup the pair with the corresponding value in the domain.
 -- | O(n) complexity in the size of the domain :O
 applyFunc :: forall a b. Ord a => Ord b => Func a b -> a -> b
 applyFunc function a =
   case function # Set.filter (\(Tuple from to) -> from == a) # Set.findMin of
+    -- This should only fail if the value the function is being applied to is
+    -- not in the domain of the function, or the function is partial, both of
+    -- which would be very serious bugs.
     Nothing ->
       unsafePerformEffect $ throwException $ error "Tried to apply mapping function and failed"
       # unsafeCoerce
@@ -83,8 +86,9 @@ mapPathAlongFunctor sigMap path = concatMap (applyFunc sigMap.edgeFunction) path
 -- | Check that a function is well-formed by observing that it maps each
 -- | element in its domain to an element in its codomain.
 -- | A function argument is required to decide codomain membership, preventing
--- | the need to explicitly represent e.g. the transitive closure of all edges
--- | in a graph when specifying the morphism function for a functor.
+-- | the need to enumerate e.g. the transitive closure of all edges
+-- | in a graph when checking the well-formedness of the morphism function of
+-- | a functor.
 functionIsWellFormed :: forall a b. Ord a => Func a b -> Set a -> (b -> Boolean) -> Boolean
 functionIsWellFormed function domain inCodomain =
   -- The first of each pair is a member of the domain
@@ -101,13 +105,8 @@ functionIsWellFormed function domain inCodomain =
   Set.size function == Set.size (Set.map fst function)
 
 -- | To check that a functor is well-formed, we check that its node and
--- | edge functions are valid, that the edge function preserves source and
--- | target of morphisms and that path equivalences are respected.
--- |
--- | Checking source and target of morphisms amounts to checking that
--- | given a morhpisms in the domain $f : a -> b$, $F(f) : F(a) -> F(b)$.
--- |
--- | TODO: Check that path equivalences are preserved
+-- | edge functions are valid, that the edge function preserves sources and
+-- | targets of morphisms and that path equivalences are preserved.
 mappingIsWellFormed :: SignatureMapping -> Boolean
 mappingIsWellFormed sigMap =
   -- Source and target signatures are well-formed
@@ -122,11 +121,11 @@ mappingIsWellFormed sigMap =
   functionIsWellFormed sigMap.edgeFunction sigMap.source.edges
                                            (pathIsSupported sigMap.target)
   &&
-  -- Source and target of morphisms are preserved
+  -- Sources and targets of morphisms are preserved
   all (\(Tuple sourceEdge targetPath) ->
-        Just (applyFunc sigMap.nodeFunction sourceEdge.source) == pathSource targetPath
+        Just (applyFunc sigMap.nodeFunction (edgeSource sourceEdge)) == pathSource targetPath
         &&
-        Just (applyFunc sigMap.nodeFunction sourceEdge.target) == pathTarget targetPath)
+        Just (applyFunc sigMap.nodeFunction (edgeTarget sourceEdge)) == pathTarget targetPath)
       sigMap.edgeFunction
   &&
   -- Path equivalences are preserved, that is, the equations in the source domain hold
@@ -137,7 +136,8 @@ mappingIsWellFormed sigMap =
                 Equation (mapPathAlongFunctor sigMap left)
                          (mapPathAlongFunctor sigMap right))
               sigMap.source.pathEquations
-    -- TODO(purescript-string-rewriting) don't run forever, return failure after x iterations
+    -- TODO(purescript-string-rewriting) don't run forever when undecidable,
+    -- return failure after x iterations.
     reWriteSystem = knuthBendix $ fromFoldable sigMap.target.pathEquations
   in
     all (\(Equation left right) -> eqModuloTheory reWriteSystem left right) mappedPathEquations

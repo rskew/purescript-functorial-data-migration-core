@@ -2,7 +2,7 @@ module Signature where
 
 import Prelude
 
-import Data.Array (concatMap, fromFoldable, uncons, unsnoc)
+import Data.Array (uncons, unsnoc)
 import Data.Foldable (all)
 import Data.Maybe (Maybe)
 import Data.Set (Set)
@@ -33,21 +33,54 @@ type Signature
 
 type Node = String
 
-type Edge = { source :: Node, target :: Node }
+data Edge
+  = Edge { source :: Node, target :: Node }
+  | Id Node
+derive instance eqEdge :: Eq Edge
+derive instance ordEdge :: Ord Edge
+instance showEdge :: Show Edge where
+   show = case _ of
+     Edge {source, target} -> "{" <> show source <> ", " <> show target <> "}"
+     Id node -> "{ id " <> show node <> "}"
+
+edgeSource :: Edge -> Node
+edgeSource = case _ of
+  Edge {source, target} -> source
+  Id node -> node
+
+edgeTarget :: Edge -> Node
+edgeTarget = case _ of
+  Edge {source, target} -> target
+  Id node -> node
+
+edgeNodes :: Edge -> Set Node
+edgeNodes = case _ of
+  Edge {source, target} -> Set.fromFoldable [source, target]
+  Id node -> Set.singleton node
 
 -- | A Path is a set of edges that connect together into an unbroken graph walk.
 type Path = Array Edge
 
 pathSource :: Path -> Maybe Node
-pathSource path = uncons path <#> \{head, tail} -> head.source
+pathSource path = uncons path <#> \{head, tail} ->
+  case head of
+    Edge {source, target} -> source
+    Id node -> node
 
 pathTarget :: Path -> Maybe Node
-pathTarget path = unsnoc path <#> \{init, last} -> last.target
+pathTarget path = unsnoc path <#> \{init, last} ->
+  case last of
+    Edge {source, target} -> target
+    Id node -> node
 
 -- | Check that a path, given by a collection of nodes, is supported by edges
 -- | in the graph.
 pathIsSupported :: Signature -> Path -> Boolean
-pathIsSupported sig pathEdges = all (flip Set.member sig.edges) pathEdges
+pathIsSupported sig pathEdges =
+  all (case _ of
+         Edge edge -> Set.member (Edge edge) sig.edges
+         Id node -> Set.member node sig.nodes)
+      pathEdges
 
 -- | Check that the path equations describe paths that exist in the signature
 -- | and that the nodes refered to by the edges are present in the node set.
@@ -58,7 +91,7 @@ signatureIsWellFormed sig =
       pathIsSupported sig leftPath
       &&
       pathIsSupported sig rightPath
-    allEdgeNodes = concatMap (\edge -> [edge.source, edge.target]) $ fromFoldable sig.edges
+    allEdgeNodes = Set.unions $ Set.map edgeNodes sig.edges
   in
     all (flip Set.member sig.nodes) allEdgeNodes
     &&
