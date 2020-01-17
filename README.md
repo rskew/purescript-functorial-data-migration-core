@@ -16,19 +16,19 @@ Sure, I could just using the CQL tool developed by the authors of the paper (htt
 ## Roadmap
 
 Base types
-[x] Represent signatures for categories/schemas and their mappings
-[x] Check that a mapping corresponds to a valid functor (a function from objects to objects and a function from morphisms to paths that preserves source, target and composition)
+- [x] Represent signatures for categories/schemas and their mappings
+- [x] Check that a mapping corresponds to a valid functor (a function from objects to objects and a function from morphisms to paths that preserves source, target and composition)
 
 Pre-migration conditions
-[ ] Check that a signature corresponds to a finite category (i.e. has cycles)
-[ ] Check that a mapping's object function is a bijection (required for well-behaved Pi migrations)
-[ ] Check that a mapping is a discrete op-fibration (required for well-behaved Sigma migrations)
+- [ ] Check that a signature corresponds to a finite category (i.e. has cycles)
+- [ ] Check that a mapping's object function is a bijection (required for well-behaved Pi migrations)
+- [ ] Check that a mapping is a discrete op-fibration (required for well-behaved Sigma migrations)
 
 SQL generation
-[ ] Compile a signature into SQL operations that create the database tables for the corresponding schema
-[ ] Compile a functor into SQL operations that implement the Delta migration
-[ ] Compile a functor into SQL operations that implement the Sigma migration
-[ ] Compile a functor into SQL operations that implement the Pi migration
+- [ ] Compile a signature into SQL operations that create the database tables for the corresponding schema
+- [ ] Compile a functor into SQL operations that implement the Delta migration
+- [ ] Compile a functor into SQL operations that implement the Sigma migration
+- [ ] Compile a functor into SQL operations that implement the Pi migration
 
 
 ## Quick start
