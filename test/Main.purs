@@ -5,11 +5,15 @@ import Prelude
 import Data.Set as Set
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
-import Effect.Class.Console as Console
-import KnuthBendix (Equation(..))
-import Signature (Edge(..), Signature, signatureIsWellFormed)
-import SignatureMapping (SignatureMapping, mappingIsWellFormed)
-import Test.Assert (assert', assertFalse')
+import Effect.Aff (launchAff_)
+import Effect.Class (liftEffect)
+import StringRewriting.KnuthBendix (Equation(..))
+import FunctorialDataMigration.Core.Signature (Signature, signatureIsWellFormed)
+import FunctorialDataMigration.Core.SignatureMapping (SignatureMapping, mappingIsWellFormed)
+import Test.Assert (assert, assertFalse)
+import Test.Spec (it, describe)
+import Test.Spec.Reporter.Console (consoleReporter)
+import Test.Spec.Runner (runSpec)
 
 emptySignature :: Signature
 emptySignature = { nodes         : Set.empty
@@ -28,10 +32,10 @@ emptySignature = { nodes         : Set.empty
 freeSquare :: Signature
 freeSquare =
   { nodes : Set.fromFoldable ["a", "b", "c", "d"]
-  , edges : Set.fromFoldable [ Edge {source: "a", target: "b"}
-                             , Edge {source: "b", target: "d"}
-                             , Edge {source: "a", target: "c"}
-                             , Edge {source: "c", target: "d"}
+  , edges : Set.fromFoldable [ {source: "a", target: "b"}
+                             , {source: "b", target: "d"}
+                             , {source: "a", target: "c"}
+                             , {source: "c", target: "d"}
                              ]
   , pathEquations : Set.empty
   }
@@ -49,14 +53,14 @@ freeSquare =
 commutativeSquare :: Signature
 commutativeSquare =
   { nodes : Set.fromFoldable ["a'", "b'", "c'", "d'"]
-  , edges : Set.fromFoldable [ Edge {source: "a'", target: "b'"}
-                             , Edge {source: "b'", target: "d'"}
-                             , Edge {source: "a'", target: "c'"}
-                             , Edge {source: "c'", target: "d'"}
+  , edges : Set.fromFoldable [ {source: "a'", target: "b'"}
+                             , {source: "b'", target: "d'"}
+                             , {source: "a'", target: "c'"}
+                             , {source: "c'", target: "d'"}
                              ]
   , pathEquations : Set.singleton
-      $ Equation [ Edge {source: "a'", target: "b'"}, Edge {source: "b'", target: "d'"} ]
-                 [ Edge {source: "a'", target: "c'"}, Edge {source: "c'", target: "d'"} ]
+      $ Equation [ {source: "a'", target: "b'"}, {source: "b'", target: "d'"} ]
+                 [ {source: "a'", target: "c'"}, {source: "c'", target: "d'"} ]
   }
 
 -- | The bogus square has a path equation including an edge
@@ -64,21 +68,21 @@ commutativeSquare =
 bogusSquare :: Signature
 bogusSquare =
   { nodes : Set.fromFoldable ["a", "b", "c", "d"]
-  , edges : Set.fromFoldable [ Edge {source: "a", target: "b"}
-                             , Edge {source: "b", target: "d"}
-                             , Edge {source: "a", target: "c"}
-                             , Edge {source: "c", target: "d"}
+  , edges : Set.fromFoldable [ {source: "a", target: "b"}
+                             , {source: "b", target: "d"}
+                             , {source: "a", target: "c"}
+                             , {source: "c", target: "d"}
                              ]
   , pathEquations : Set.singleton
-    (Equation [ Edge {source: "a", target: "b"}, Edge {source: "b", target: "d"} ]
-              [ Edge {source: "a", target: "d"} ])
+    (Equation [ {source: "a", target: "b"}, {source: "b", target: "d"} ]
+              [ {source: "a", target: "d"} ])
   }
 
 -- | A signature with an edge that doesn't have corresponding nodes
 invalidEdgeSig :: Signature
 invalidEdgeSig =
   { nodes : Set.singleton "a"
-  , edges : Set.singleton $ Edge { source : "a", target : "b" }
+  , edges : Set.singleton $ { source : "a", target : "b" }
   , pathEquations : Set.empty
   }
 
@@ -98,14 +102,14 @@ freeToCommMapping =
     , Tuple "d" "d'"
     ]
   , edgeFunction : Set.fromFoldable
-    [ Tuple (Edge {source: "a", target: "b"})
-            [ Edge {source: "a'", target: "b'"} ]
-    , Tuple (Edge {source: "b", target: "d"})
-            [ Edge {source: "b'", target: "d'"} ]
-    , Tuple (Edge {source: "a", target: "c"})
-            [ Edge {source: "a'", target: "c'"} ]
-    , Tuple (Edge {source: "c", target: "d"})
-            [ Edge {source: "c'", target: "d'"} ]
+    [ Tuple {source: "a", target: "b"}
+            [ {source: "a'", target: "b'"} ]
+    , Tuple {source: "b", target: "d"}
+            [ {source: "b'", target: "d'"} ]
+    , Tuple {source: "a", target: "c"}
+            [ {source: "a'", target: "c'"} ]
+    , Tuple {source: "c", target: "d"}
+            [ {source: "c'", target: "d'"} ]
     ]
   }
 
@@ -124,14 +128,14 @@ freeToCommMappingViolatingSourceTargetPreservation =
     , Tuple "d" "b'"
     ]
   , edgeFunction : Set.fromFoldable
-    [ Tuple (Edge {source: "a", target: "b"})
-            [ Edge {source: "a'", target: "b'"} ]
-    , Tuple (Edge {source: "b", target: "d"})
-            [ Edge {source: "b'", target: "d'"} ]
-    , Tuple (Edge {source: "a", target: "c"})
-            [ Edge {source: "a'", target: "c'"} ]
-    , Tuple (Edge {source: "c", target: "d"})
-            [ Edge {source: "c'", target: "d'"} ]
+    [ Tuple {source: "a", target: "b"}
+            [ {source: "a'", target: "b'"} ]
+    , Tuple {source: "b", target: "d"}
+            [ {source: "b'", target: "d'"} ]
+    , Tuple {source: "a", target: "c"}
+            [ {source: "a'", target: "c'"} ]
+    , Tuple {source: "c", target: "d"}
+            [ {source: "c'", target: "d'"} ]
     ]
   }
 
@@ -156,14 +160,14 @@ commToFreeMapping =
     , Tuple "d'" "d"
     ]
   , edgeFunction : Set.fromFoldable
-    [ Tuple (Edge {source: "a'", target: "b'"})
-            [ Edge {source: "a", target: "b"} ]
-    , Tuple (Edge {source: "b'", target: "d'"})
-            [ Edge {source: "b", target: "d"} ]
-    , Tuple (Edge {source: "a'", target: "c'"})
-            [ Edge {source: "a", target: "c"} ]
-    , Tuple (Edge {source: "c'", target: "d'"})
-            [ Edge {source: "c", target: "d"} ]
+    [ Tuple {source: "a'", target: "b'"}
+            [ {source: "a", target: "b"} ]
+    , Tuple {source: "b'", target: "d'"}
+            [ {source: "b", target: "d"} ]
+    , Tuple {source: "a'", target: "c'"}
+            [ {source: "a", target: "c"} ]
+    , Tuple {source: "c'", target: "d'"}
+            [ {source: "c", target: "d"} ]
     ]
   }
 
@@ -171,6 +175,9 @@ commToFreeMapping =
 -- | as by mapping all commutativeSquare objects to a single freeSquare object and
 -- | all commutativeSquare edges to the identity morphism of the freeSquare object,
 -- | the path equations are trivially preserved.
+-- |
+-- | The mappings from the edges fo the commutative square to the identity morphism on
+-- | the "a" object of the free square are implicit.
 commToFreeMappingTrivial :: SignatureMapping
 commToFreeMappingTrivial =
   { source : commutativeSquare
@@ -181,45 +188,30 @@ commToFreeMappingTrivial =
     , Tuple "c'" "a"
     , Tuple "d'" "a"
     ]
-  , edgeFunction : Set.fromFoldable
-    [ Tuple (Edge {source: "a'", target: "b'"})
-            [ Id "a" ]
-    , Tuple (Edge {source: "b'", target: "d'"})
-            [ Id "a" ]
-    , Tuple (Edge {source: "a'", target: "c'"})
-            [ Id "a" ]
-    , Tuple (Edge {source: "c'", target: "d'"})
-            [ Id "a" ]
-    ]
+  , edgeFunction : Set.empty
   }
 
 main :: Effect Unit
 main = do
-  assert' "emptySignature should we well-formed"
-    $ signatureIsWellFormed emptySignature
-
-  assert' "freeSquare should we well-formed"
-    $ signatureIsWellFormed freeSquare
-
-  assert' "commutativeSquare should we well-formed"
-    $ signatureIsWellFormed commutativeSquare
-
-  assertFalse' "bogusSquare should not be well-formed"
-    $ signatureIsWellFormed bogusSquare
-
-  assertFalse' "invalidEdgeSig should not be well-formed"
-    $ signatureIsWellFormed invalidEdgeSig
-
-  assert' "freeToCommMapping should be well-formed"
-    $ mappingIsWellFormed freeToCommMapping
-
-  assertFalse' "freeToCommMappingViolatingSourceTargetPreservation should not be well-formed"
-    $ mappingIsWellFormed freeToCommMappingViolatingSourceTargetPreservation
-
-  assertFalse' "commToFreeMapping should not be well-formed"
-    $ mappingIsWellFormed commToFreeMapping
-
-  assert' "commToFreeMappingTrivial should be well-formed"
-    $ mappingIsWellFormed commToFreeMappingTrivial
-
-  Console.log ":D"
+  launchAff_ do
+    runSpec [ consoleReporter ] do
+      describe "Well-formedness of Signatures" do
+        it "emptySignature is well-formed" $ liftEffect $
+          assert $ signatureIsWellFormed emptySignature
+        it "freeSquare is well-formed" $ liftEffect $
+          assert $ signatureIsWellFormed freeSquare
+        it "commutativeSquare is well-formed" $ liftEffect $
+          assert $ signatureIsWellFormed commutativeSquare
+        it "bogusSquare is not well-formed" $ liftEffect $
+          assertFalse $ signatureIsWellFormed bogusSquare
+        it "invalidEdgeSig is not well-formed" $ liftEffect $
+          assertFalse $ signatureIsWellFormed invalidEdgeSig
+      describe "Well-formedness of SignatureMappings" do
+        it "freeToCommMapping is well-formed" $ liftEffect $
+          assert $ mappingIsWellFormed freeToCommMapping
+        it "freeToCommMappingViolatingSourceTargetPreservation is not well-formed" $ liftEffect $
+          assertFalse $ mappingIsWellFormed freeToCommMappingViolatingSourceTargetPreservation
+        it "commToFreeMapping is not well-formed" $ liftEffect $
+          assertFalse $ mappingIsWellFormed commToFreeMapping
+        it "commToFreeMappingTrivial is well-formed" $ liftEffect $
+          assert $ mappingIsWellFormed commToFreeMappingTrivial

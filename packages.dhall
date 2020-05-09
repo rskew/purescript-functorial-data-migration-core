@@ -119,7 +119,7 @@ let additions =
 
 
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.13.4-20191110/packages.dhall sha256:563a7f694e18e6399f7f6d01f5b7e3c3345781655d99945768f48e458feb93a4
+      https://github.com/purescript/package-sets/releases/download/psc-0.13.3-20190827/packages.dhall sha256:93f6b11068b42eac6632d56dab659a151c231381e53a16de621ae6d0dab475ce
 
 let overrides = {=}
 
@@ -140,7 +140,7 @@ let additions =
       , repo =
           "https://github.com/rskew/purescript-string-rewriting.git"
       , version =
-          "f16d4a0b172a4ba63338a1367ee02870d76e4506"
+          "0.0.1"
       }
   }
 

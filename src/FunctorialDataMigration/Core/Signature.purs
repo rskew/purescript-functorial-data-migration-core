@@ -1,13 +1,14 @@
-module Signature where
+module FunctorialDataMigration.Core.Signature where
 
 import Prelude
 
 import Data.Array (uncons, unsnoc)
+import Data.Array as Array
 import Data.Foldable (all)
-import Data.Maybe (Maybe)
+import Data.Maybe (Maybe(..))
 import Data.Set (Set)
 import Data.Set as Set
-import KnuthBendix (Equation(..))
+import StringRewriting.KnuthBendix (Equation(..))
 
 -- | A Signature is a graph + path equivalences that give the presentation of
 -- | a category.
@@ -33,53 +34,28 @@ type Signature
 
 type Node = String
 
-data Edge
-  = Edge { source :: Node, target :: Node }
-  | Id Node
-derive instance eqEdge :: Eq Edge
-derive instance ordEdge :: Ord Edge
-instance showEdge :: Show Edge where
-   show = case _ of
-     Edge {source, target} -> "{" <> show source <> ", " <> show target <> "}"
-     Id node -> "{ id " <> show node <> "}"
-
-edgeSource :: Edge -> Node
-edgeSource = case _ of
-  Edge {source, target} -> source
-  Id node -> node
-
-edgeTarget :: Edge -> Node
-edgeTarget = case _ of
-  Edge {source, target} -> target
-  Id node -> node
+type Edge
+  = { source :: Node
+    , target :: Node
+    }
 
 edgeNodes :: Edge -> Set Node
-edgeNodes = case _ of
-  Edge {source, target} -> Set.fromFoldable [source, target]
-  Id node -> Set.singleton node
+edgeNodes {source, target} = Set.fromFoldable [source, target]
 
 -- | A Path is a set of edges that connect together into an unbroken graph walk.
 type Path = Array Edge
 
 pathSource :: Path -> Maybe Node
-pathSource path = uncons path <#> \{head, tail} ->
-  case head of
-    Edge {source, target} -> source
-    Id node -> node
+pathSource path = uncons path <#> \{head, tail} -> head.source
 
 pathTarget :: Path -> Maybe Node
-pathTarget path = unsnoc path <#> \{init, last} ->
-  case last of
-    Edge {source, target} -> target
-    Id node -> node
+pathTarget path = unsnoc path <#> \{init, last} -> last.target
 
 -- | Check that a path, given by a collection of nodes, is supported by edges
 -- | in the graph.
 pathIsSupported :: Signature -> Path -> Boolean
 pathIsSupported sig pathEdges =
-  all (case _ of
-         Edge edge -> Set.member (Edge edge) sig.edges
-         Id node -> Set.member node sig.nodes)
+  all (flip Set.member sig.edges)
       pathEdges
 
 -- | Check that the path equations describe paths that exist in the signature
@@ -96,4 +72,31 @@ signatureIsWellFormed sig =
     all (flip Set.member sig.nodes) allEdgeNodes
     &&
     all pathEquationIsSupported sig.pathEquations
+
+-- | Fails if the Set of Edges isn't a single contiguous path.
+-- | May fail if cycles exist in the path.
+-- | Identity edges are removed from path.
+sortPath :: Set Edge -> Maybe (Array Edge)
+sortPath unsorted' = do
+  -- Grab any old non-identity edge to start building our path
+  case unsorted' # Set.findMin of
+    Nothing -> Just []
+    Just edge ->
+      let
+        restUnsorted = Set.delete edge unsorted'
+      in
+        sortPath' edge.source [edge] edge.target restUnsorted
+        where
+          sortPath' :: Node -> Array Edge -> Node -> Set Edge -> Maybe (Array Edge)
+          sortPath' startNode sortedSoFar endNode unsorted =
+            if Set.size unsorted == 0 then Just sortedSoFar else do
+              nextEdge <- unsorted
+                          # Set.filter (\edge' -> edge'.target == startNode || edge'.source == endNode)
+                          # Set.findMin
+              let restUnsorted = Set.delete nextEdge unsorted
+              if nextEdge.target == startNode
+              then
+                sortPath' nextEdge.source (Array.cons nextEdge sortedSoFar) endNode restUnsorted
+              else
+                sortPath' startNode (Array.snoc sortedSoFar nextEdge) nextEdge.target restUnsorted
 
